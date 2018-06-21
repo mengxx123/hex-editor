@@ -1,36 +1,63 @@
 <template>
     <my-page title="十六进制查看" :page="page">
         <div class="editor-box" :style="{right: toolBoxWidth + 'px'}">
-            <input type="file" @change="fileChange($event)">
-
-            <div class="loading" v-if="loading">读取中...</div>
-
-            <div class="list" v-if="result">
-                <div class="list-row">
-                    <div class="grid grid-offset">/</div>
-                    <div class="grid grid-data grid-data-header">
-                        <div class="grid grid-ceil" v-for="item in headers">{{ item }}</div>
+            <div class="editor-box-content">
+                <input type="file" @change="fileChange($event)">
+                <div class="loading" v-if="loading">读取中...</div>
+                <div class="data-box" v-if="displayResult">
+                    <div class="list">
+                        <div class="list-row data-header">
+                            <div class="grid grid-offset">偏移</div>
+                            <div class="grid grid-data grid-data-header">
+                                <div class="grid grid-ceil" v-for="item in headers">{{ item }}</div>
+                            </div>
+                            <div class="grid grid-asc">ASCII</div>
+                        </div>
+                        <div class="list-row-box">
+                            <div class="list-row list-row-offset">
+                                <div class="grid grid-offset" v-for="row, index in displayResult">{{ offset(index) }}</div>
+                            </div>
+                            <div class="list-row list-row-hex">
+                                <div class="grid grid-data" v-for="row, index in displayResult">
+                                    <div class="grid grid-ceil" v-for="item, column in row"
+                                         :class="ceilClass(index, column)"
+                                         @mousedown="ceilMouseDown($event, index, column)"
+                                         @mousemove="ceilMouseMove($event, index, column)"
+                                         @mouseup="ceilMouseUp($event, index, column)"
+                                         @click="select(index, column)">{{ hex(item) }} </div>
+                                </div>
+                            </div>
+                            <div class="list-row list-row-asc">
+                                <div class="asc" v-for="row, index in displayResult">
+                                    <span v-for="item, column in ascArr(row)">
+                                        <span class="asc-ceil"
+                                              :class="ascCeilClass(index, column)"
+                                              @mousedown="ceilMouseDown($event, index, column)"
+                                              @mousemove="ceilMouseMove($event, index, column)"
+                                              @mouseup="ceilMouseUp($event, index, column)">{{ item }} </span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="grid grid-asc"></div>
-                </div>
-                <div class="list-row" v-for="row, index in result">
-                    <div class="grid grid-offset">{{ offset(index) }}</div>
-                    <div class="grid grid-data">
-                        <div class="grid grid-ceil" v-for="item, column in row"
-                             :class="ceilClass(index, column)"
-                             @click="select(index, column)">{{ hex(item) }}</div>
+                    <div class="btns">
+                        <ui-raised-button class="btn" label="上一页" @click="prevPage" />
+                        <ui-raised-button class="btn" label="下一页" @click="nextPage" />
+                        <!--{{ dataOffset }}-->
                     </div>
-                    <div class="asc">
-                        <span v-for="item, column in ascArr(row)">
-                            <span class="asc-ceil" :class="ascCeilClass(index, column)">{{ item }} </span>
-                        </span>
+                    <div>
+                        <ui-slider class="slider" v-model="dataOffset" :step="1" :min="0" :display-value="false" :max="result.length" />
                     </div>
                 </div>
             </div>
         </div>
         <div class="tool-box" :style="{width: toolBoxWidth + 'px'}">
             <div class="handler" @mousedown="handlerMouseDown($event)"></div>
-            <ui-article>
+            <div class="search-box">
+                <input class="input" v-model="keyword" placeholder="搜索十六进制编码或 ASCII">
+                <ui-icon-button icon="search" label="搜索" @click="search" />
+            </div>
+            <ui-article class="article">
                 <table v-if="ceil">
                     <tr>
                         <th>二进制（8位）</th>
@@ -81,30 +108,39 @@
     export default {
         data () {
             return {
+                dataOffset: 0,
                 toolBoxWidth: 256,
-                rowIndex: 0,
-                columnIndex: 0,
+                // selection
+                startPosition: 0,
+                endPosition: 0,
                 loading: false,
                 headers: ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '0A', '0B', '0C', '0D', '0E', '0F'],
-                result: null,
+//                result: null,
+                displayResult: null,
                 ceil: null,
 //                ceil: 71,
-                page: {
-                    menu: [
-                        {
-                            type: 'icon',
-                            icon: 'language',
-                            to: '/ex',
-                            title: '语言'
-                        }
-                    ]
-                }
+                // search
+                keyword: '',
+//                page: {
+//                    menu: [
+//                        {
+//                            type: 'icon',
+//                            icon: 'language',
+//                            to: '/ex',
+//                            title: '语言'
+//                        }
+//                    ]
+//                }
             }
         },
         computed: {
             ceilBinary() {
                 return this.ceil.toString(2).padStart(8, '0')
             }
+//            displayResult() {
+//                console.log('计算')
+//                return this.result.slice(this.dataOffset, this.dataOffset + 20)
+//            }
         },
         mounted() {
             console.log('开始')
@@ -114,6 +150,20 @@
             this.init()
         },
         methods: {
+            prevPage(e) {
+                this.dataOffset -= 20
+                if (this.dataOffset < 0) {
+                    this.dataOffset = 0
+                }
+                this.loadPage()
+            },
+            nextPage(e) {
+                console.log('下一页')
+                this.dataOffset += 20
+//                let start = new Date
+                this.loadPage()
+                console.log('数据完成', this.displayResult)
+            },
             handlerMouseDown(e) {
                 let downX = e.pageX
                 let onMouseMove
@@ -130,26 +180,49 @@
                     document.body.setAttribute('user-select', 'inherit')
                 })
             },
+            ceilMouseDown(e, row, column) {
+                this.ceilDown = true
+                let position = (this.dataOffset + row) * 16 + column
+                this.startPosition = position
+                this.endPosition = position
+            },
+            ceilMouseUp(e, row, column) {
+                this.ceilDown = false
+            },
+            ceilMouseMove(e, row, column) {
+                if (this.ceilDown) {
+                    console.log(row, column)
+                    let position = (this.dataOffset + row) * 16 + column
+                    this.endPosition = position
+                }
+            },
             ceilClass(row, column) {
-                if (row === this.rowIndex && column === this.columnIndex) {
+                let position = (this.dataOffset + row) * 16 + column
+                if (position >= this.startPosition && position <= this.endPosition) {
                     return ['active']
                 }
                 return []
             },
             ascCeilClass(row, column) {
-                if (row === this.rowIndex && column === this.columnIndex) {
+                let position = (this.dataOffset + row) * 16 + column
+                if (position >= this.startPosition && position <= this.endPosition) {
                     return ['active']
                 }
                 return []
             },
             select(row, column) {
-                this.rowIndex = row
-                this.columnIndex = column
-                this.ceil = this.result[row][column]
+                let position = (this.dataOffset + row) * 16 + column
+                this.startPosition = position
+                this.endPosition = position
+                this.ceil = this.displayResult[row][column]
             },
             ascArr(row) {
                 return row.map(item => {
-                    return String.fromCharCode(item)
+                    let ret = String.fromCharCode(item)
+                    if (!ret && !ret.length) {
+                        return '.'
+                    }
+                    return ret
                 })
             },
 //            asc(row) {
@@ -179,28 +252,78 @@
                 let ret = []
                 let intArr = []
                 let tempArr = []
+                this.ascText = ''
+                this.hexText = ''
                 for (let i = 0; i < array.length; i++) {
                     if (i % 16 === 0) {
                         tempArr = []
                     }
+                    this.ascText += String.fromCharCode(array[i])
+                    this.hexText += array[i].toString(16).toUpperCase()
                     intArr.push(array[i])
 //                    tempArr.push(array[i].toString(16))
                     tempArr.push(array[i])
                     if (i % 16 === 15) {
                         ret.push(tempArr)
-
                     }
                 }
+                console.log('长度' + this.ascText.length)
+                console.log(this.hexText.substring(0, 100))
+                ret.push(tempArr)
                 console.log(ret)
                 this.result = ret
+                this.loadPage()
                 this.loading = false
                 let loadTime = ((new Date().getTime() - this.startTime) / 1000).toFixed(2)
                 console.log(`加载了 ${loadTime}ms`)
             },
+            search() {
+                if (!this.keyword) {
+                    this.$message({
+                        type: 'danger',
+                        text: '请输入关键词'
+                    })
+                    return
+                }
+                let idx = this.ascText.indexOf(this.keyword) // toUpperCase
+                if (idx !== -1) {
+                    console.log('找到了' + idx)
+                    this.dataOffset = idx / 16
+                    console.log(this.dataOffset)
+                    this.loadPage()
+                } else {
+                    idx = this.hexText.indexOf(this.keyword.toUpperCase()) // TODO
+                    if (idx !== -1) {
+                        console.log('找到了' + idx)
+                        this.dataOffset = idx / 16 / 2 + 1
+                        console.log(this.dataOffset)
+                        this.loadPage()
+                    } else {
+                        this.$message({
+                            type: 'danger',
+                            text: '搜索不到文本'
+                        })
+                        console.log('找不到')
+                    }
+//                    this.$message({
+//                        type: 'danger',
+//                        text: '搜索不到文本'
+//                    })
+//                    console.log('找不到')
+                }
+            },
             offset(index) {
-                return (index * 16).toString(16).toUpperCase().padStart(8, '0')
+                return ((this.dataOffset + index) * 16).toString(16).toUpperCase().padStart(8, '0')
             },
             init() {
+            },
+            loadPage() {
+                this.displayResult = this.result.slice(this.dataOffset, this.dataOffset + 20)
+            }
+        },
+        watch: {
+            dataOffset() {
+                this.loadPage()
             }
         }
     }
@@ -213,6 +336,14 @@
         left: 0;
         right: 256px;
         bottom: 0;
+        overflow: auto;
+    }
+    .editor-box-content {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 950px;
         padding: 16px;
     }
     .tool-box {
@@ -221,7 +352,6 @@
         right: 0;
         width: 256px;
         bottom: 0;
-        padding: 16px;
         border-left: 1px solid rgba(0,0,0,.12);
         .handler {
             position: absolute;
@@ -232,13 +362,31 @@
             /*background-color: #ccc;*/
             cursor: col-resize;
         }
+        .article {
+            padding: 16px;
+        }
         table {
             width: 100%;
         }
     }
+    .search-box {
+        display: flex;
+        input {
+            height: 48px;
+            flex-grow: 1;
+            outline: none;
+            border: none;
+            padding-left: 16px;
+        }
+        border-bottom: 1px solid rgba(0,0,0,.12);
+    }
     .list {
+        height: 560px;
         margin-top: 24px;
         /*max-width: 640px;*/
+    }
+    .list-row-box {
+        display: flex;
     }
     .list-row {
         margin-bottom: 4px;
@@ -266,6 +414,19 @@
     .grid-data-header {
         color: #999;
     }
+    .data-header {
+        color: #999;
+        /*text-align: center;*/
+    }
+    .list-row-offset {
+        width: 80px;
+    }
+    .list-row-hex {
+        width: 560px;
+    }
+    .list-row-asc {
+        /*width: 560px;*/
+    }
     .grid-offset {
         width: 80px;
         color: #999;
@@ -274,11 +435,19 @@
         display: inline-block;
         width: 16px;
         text-align: center;
+        cursor: pointer;
         &.active {
             background-color: #ccc;
         }
     }
     .loading {
         margin: 16px 0;
+    }
+    .btns {
+        margin-top: 16px;
+        margin-bottom: 16px;
+        .btn {
+            margin-right: 8px;
+        }
     }
 </style>
