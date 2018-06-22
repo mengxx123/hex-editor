@@ -32,6 +32,7 @@
                                     <span v-for="item, column in ascArr(row)">
                                         <span class="asc-ceil"
                                               :class="ascCeilClass(index, column)"
+                                              @click="select(index, column)"
                                               @mousedown="ceilMouseDown($event, index, column)"
                                               @mousemove="ceilMouseMove($event, index, column)"
                                               @mouseup="ceilMouseUp($event, index, column)">{{ item }} </span>
@@ -47,7 +48,7 @@
                         <!--{{ dataOffset }}-->
                     </div>
                     <div>
-                        <!--<ui-slider class="slider" v-model="dataOffset" :step="1" :min="0" :display-value="false" :max="result.length" />-->
+                        <ui-slider class="slider" v-model="dataOffset" :step="1" :min="0" :display-value="false" :max="result.length" v-if="result" />
                     </div>
                 </div>
             </div>
@@ -64,20 +65,22 @@
                         <th>十六进制</th>
                         <td>
                             <!--{{ ceilHex }}-->
-                            <ui-select-field class="hex-select" v-model="ceilHex1">
+                            <ui-select-field class="hex-select" v-model="ceilHex1" @change="onEdit">
                                 <ui-menu-item :value="item" :title="item" v-for="item in hexArr" :key="item"/>
                             </ui-select-field>
-                            <ui-select-field class="hex-select" v-model="ceilHex2">
+                            <ui-select-field class="hex-select" v-model="ceilHex2" @change="onEdit">
                                 <ui-menu-item :value="item" :title="item" v-for="item in hexArr" :key="item"/>
                             </ui-select-field>
                         </td>
                     </tr>
-                    <tr>
-                        <th>十六进制</th>
-                        <td>
-                            {{ ceilHex }}
-                        </td>
-                    </tr>
+                    <!--<tr>-->
+                        <!--<th>十六进制</th>-->
+                        <!--<td>-->
+                            <!--{{ ceilHex }}-->
+                            <!--<br>-->
+                            <!--{{ ceilHex1 }} {{ ceilHex2 }}-->
+                        <!--</td>-->
+                    <!--</tr>-->
                     <tr>
                         <th>二进制（8位）</th>
                         <td>{{ ceilBinary }}</td>
@@ -181,7 +184,7 @@
             console.log('47'.toString(10))
             console.log(String.fromCharCode(71))
             this.init()
-//            this.debug()
+            this.debug()
         },
         methods: {
             debug() {
@@ -248,8 +251,6 @@
                 let position = (this.dataOffset + row) * 16 + column
                 this.selectedRow = row
                 this.selectedColumn = column
-                this.startPosition = position
-                this.endPosition = position
                 this.ceil = this.displayResult[row][column]
                 this.ceilHex1 = this.ceil.toString(16).charAt(0).toUpperCase()
                 this.ceilHex2 = this.ceil.toString(16).charAt(1).toUpperCase()
@@ -291,14 +292,10 @@
                 let ret = []
                 let intArr = []
                 let tempArr = []
-                this.ascText = ''
-                this.hexText = ''
                 for (let i = 0; i < array.length; i++) {
                     if (i % 16 === 0) {
                         tempArr = []
                     }
-                    this.ascText += String.fromCharCode(array[i])
-                    this.hexText += array[i].toString(16).toUpperCase()
                     intArr.push(array[i])
 //                    tempArr.push(array[i].toString(16))
                     tempArr.push(array[i])
@@ -321,14 +318,28 @@
                     })
                     return
                 }
-                let idx = this.ascText.indexOf(this.keyword) // toUpperCase
+
+                let startTime = new Date().getTime()
+                console.log()
+                let ascText = ''
+                let hexText = ''
+                for (let i = 0; i < this.array.length; i++) {
+                    ascText += String.fromCharCode(this.array[i])
+                    hexText += this.array[i].toString(16).toUpperCase()
+                }
+                console.log(ascText.length)
+                console.log(new Date().getTime() - startTime)
+
+                let idx = ascText.indexOf(this.keyword) // toUpperCase
+                console.log(idx)
                 if (idx !== -1) {
                     console.log('找到了' + idx)
                     this.dataOffset = idx / 16
+                    this.startPosition = this.endPosition = idx
                     console.log(this.dataOffset)
                     this.loadPage()
                 } else {
-                    idx = this.hexText.indexOf(this.keyword.toUpperCase()) // TODO
+                    idx = hexText.indexOf(this.keyword.toUpperCase()) // TODO
                     if (idx !== -1) {
                         console.log('找到了' + idx)
                         this.dataOffset = idx / 16 / 2 + 1
@@ -341,11 +352,6 @@
                         })
                         console.log('找不到')
                     }
-//                    this.$message({
-//                        type: 'danger',
-//                        text: '搜索不到文本'
-//                    })
-//                    console.log('找不到')
                 }
             },
             offset(index) {
@@ -377,11 +383,14 @@
                 a.click();
             },
             onEdit() {
-                let num = parseInt(this.ceilHex1 + this.ceilHex2, 16)
-                console.log(num)
-                this.array[this.startPosition] = num
-                this.ceil = num
-                this.displayResult[this.selectedRow][this.selectedColumn] = num
+                this.$nextTick(() => {
+                    console.log('改变了', this.ceilHex1 + this.ceilHex2)
+                    let num = parseInt(this.ceilHex1 + this.ceilHex2, 16)
+                    console.log(num)
+                    this.array[this.startPosition] = num
+                    this.ceil = num
+                    this.displayResult[this.selectedRow][this.selectedColumn] = num
+                })
             }
         },
         watch: {
@@ -389,10 +398,10 @@
                 this.loadPage()
             },
             ceilHex1() {
-                this.onEdit()
+//                this.onEdit()
             },
             ceilHex2() {
-                this.onEdit()
+//                this.onEdit()
             }
         }
     }
@@ -453,6 +462,7 @@
         height: 560px;
         margin-top: 24px;
         /*max-width: 640px;*/
+        user-select: none;
     }
     .list-row-box {
         display: flex;
