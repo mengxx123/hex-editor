@@ -65,10 +65,10 @@
                         <td>
                             <!--{{ ceilHex }}-->
                             <ui-select-field class="hex-select" v-model="ceilHex1">
-                                <ui-menu-item :value="item" :title="item" v-for="item in hexArr"/>
+                                <ui-menu-item :value="item" :title="item" v-for="item in hexArr" :key="item"/>
                             </ui-select-field>
                             <ui-select-field class="hex-select" v-model="ceilHex2">
-                                <ui-menu-item :value="item" :title="item" v-for="item in hexArr"/>
+                                <ui-menu-item :value="item" :title="item" v-for="item in hexArr" :key="item"/>
                             </ui-select-field>
                         </td>
                     </tr>
