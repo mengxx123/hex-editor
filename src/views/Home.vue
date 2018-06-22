@@ -1,5 +1,5 @@
 <template>
-    <my-page title="十六进制查看" :page="page">
+    <my-page title="十六进制编辑器" :page="page">
         <div class="editor-box" :style="{right: toolBoxWidth + 'px'}">
             <div class="editor-box-content">
                 <input type="file" @change="fileChange($event)">
@@ -43,15 +43,16 @@
                     <div class="btns">
                         <ui-raised-button class="btn" label="上一页" @click="prevPage" />
                         <ui-raised-button class="btn" label="下一页" @click="nextPage" />
+                        <ui-raised-button class="btn" label="下载" @click="download" />
                         <!--{{ dataOffset }}-->
                     </div>
                     <div>
-                        <ui-slider class="slider" v-model="dataOffset" :step="1" :min="0" :display-value="false" :max="result.length" />
+                        <!--<ui-slider class="slider" v-model="dataOffset" :step="1" :min="0" :display-value="false" :max="result.length" />-->
                     </div>
                 </div>
             </div>
         </div>
-        <div class="tool-box" :style="{width: toolBoxWidth + 'px'}">
+        <div class="tool-box" :style="{width: toolBoxWidth + 'px'}" v-if="displayResult">
             <div class="handler" @mousedown="handlerMouseDown($event)"></div>
             <div class="search-box">
                 <input class="input" v-model="keyword" placeholder="搜索十六进制编码或 ASCII">
@@ -59,6 +60,24 @@
             </div>
             <ui-article class="article">
                 <table v-if="ceil">
+                    <tr>
+                        <th>十六进制</th>
+                        <td>
+                            <!--{{ ceilHex }}-->
+                            <ui-select-field class="hex-select" v-model="ceilHex1">
+                                <ui-menu-item :value="item" :title="item" v-for="item in hexArr"/>
+                            </ui-select-field>
+                            <ui-select-field class="hex-select" v-model="ceilHex2">
+                                <ui-menu-item :value="item" :title="item" v-for="item in hexArr"/>
+                            </ui-select-field>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>十六进制</th>
+                        <td>
+                            {{ ceilHex }}
+                        </td>
+                    </tr>
                     <tr>
                         <th>二进制（8位）</th>
                         <td>{{ ceilBinary }}</td>
@@ -70,6 +89,10 @@
                     <tr>
                         <th>UInt8</th>
                         <td>{{ ceil }}</td>
+                    </tr>
+                    <tr>
+                        <th>ASCII</th>
+                        <td>{{ ceilAsc }}</td>
                     </tr>
                     <!--<tr>-->
                         <!--<th>Int16</th>-->
@@ -108,8 +131,12 @@
     export default {
         data () {
             return {
+                hexArr: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'],
+                ceilHex1: '1',
+                ceilHex2: '2',
                 dataOffset: 0,
-                toolBoxWidth: 256,
+//                toolBoxWidth: 256,
+                toolBoxWidth: 400,
                 // selection
                 startPosition: 0,
                 endPosition: 0,
@@ -117,8 +144,8 @@
                 headers: ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '0A', '0B', '0C', '0D', '0E', '0F'],
 //                result: null,
                 displayResult: null,
-                ceil: null,
-//                ceil: 71,
+//                ceil: null,
+                ceil: 71,
                 // search
                 keyword: '',
 //                page: {
@@ -136,6 +163,12 @@
         computed: {
             ceilBinary() {
                 return this.ceil.toString(2).padStart(8, '0')
+            },
+            ceilAsc() {
+                return String.fromCharCode(this.ceil)
+            },
+            ceilHex() {
+                return this.ceil.toString(16).toUpperCase()
             }
 //            displayResult() {
 //                console.log('计算')
@@ -148,8 +181,13 @@
             console.log('47'.toString(10))
             console.log(String.fromCharCode(71))
             this.init()
+//            this.debug()
         },
         methods: {
+            debug() {
+                let array = new Uint8Array([49, 50, 51, 52, 53, 54, 55, 56, 57])
+                this.loadData(array)
+            },
             prevPage(e) {
                 this.dataOffset -= 20
                 if (this.dataOffset < 0) {
@@ -158,11 +196,8 @@
                 this.loadPage()
             },
             nextPage(e) {
-                console.log('下一页')
                 this.dataOffset += 20
-//                let start = new Date
                 this.loadPage()
-                console.log('数据完成', this.displayResult)
             },
             handlerMouseDown(e) {
                 let downX = e.pageX
@@ -191,7 +226,6 @@
             },
             ceilMouseMove(e, row, column) {
                 if (this.ceilDown) {
-                    console.log(row, column)
                     let position = (this.dataOffset + row) * 16 + column
                     this.endPosition = position
                 }
@@ -212,14 +246,18 @@
             },
             select(row, column) {
                 let position = (this.dataOffset + row) * 16 + column
+                this.selectedRow = row
+                this.selectedColumn = column
                 this.startPosition = position
                 this.endPosition = position
                 this.ceil = this.displayResult[row][column]
+                this.ceilHex1 = this.ceil.toString(16).charAt(0).toUpperCase()
+                this.ceilHex2 = this.ceil.toString(16).charAt(1).toUpperCase()
             },
             ascArr(row) {
                 return row.map(item => {
                     let ret = String.fromCharCode(item)
-                    if (!ret && !ret.length) {
+                    if (!ret || !ret.length) {
                         return '.'
                     }
                     return ret
@@ -234,21 +272,22 @@
                 this.loading = true
                 this.result = null
                 let file = e.target.files[0]
+                this.fileName = file.name
+                this.fileType = file.type
+
                 let reader = new FileReader()
                 this.startTime = new Date().getTime()
                 reader.onload = e => {
-//                    console.log(e.target.result)
                     let array = new Uint8Array(e.target.result)
-                    console.log(array)
-                    console.log(array[0].toString(16))
-                    this.dealData(array)
+                    this.loadData(array)
                 }
                 reader.readAsArrayBuffer(file)
             },
             hex(item) {
                 return item.toString(16).toUpperCase()
             },
-            dealData(array) {
+            loadData(array) {
+                this.array = array
                 let ret = []
                 let intArr = []
                 let tempArr = []
@@ -267,10 +306,7 @@
                         ret.push(tempArr)
                     }
                 }
-                console.log('长度' + this.ascText.length)
-                console.log(this.hexText.substring(0, 100))
                 ret.push(tempArr)
-                console.log(ret)
                 this.result = ret
                 this.loadPage()
                 this.loading = false
@@ -319,11 +355,44 @@
             },
             loadPage() {
                 this.displayResult = this.result.slice(this.dataOffset, this.dataOffset + 20)
+                this.select(0, 0)
+            },
+            download() {
+//                var array = new Uint8Array( this.array.length);
+//
+//                for (var i = 0; i < this.array.length; ++i) {
+//                    array[i] = this.array[i].decimalVal;
+//                }
+                console.log(this.array)
+//                this.array[1] = 48
+                var b64 = btoa(String.fromCharCode.apply(null, this.array));
+
+                var a = document.createElement("a");
+                a.style = "display: none";
+                let fileType = this.fileType || 'application/octet-stream';
+                a.setAttribute('download', this.fileName);
+                a.href = 'data:' + fileType + ';base64,' + b64;
+
+                document.body.appendChild(a);
+                a.click();
+            },
+            onEdit() {
+                let num = parseInt(this.ceilHex1 + this.ceilHex2, 16)
+                console.log(num)
+                this.array[this.startPosition] = num
+                this.ceil = num
+                this.displayResult[this.selectedRow][this.selectedColumn] = num
             }
         },
         watch: {
             dataOffset() {
                 this.loadPage()
+            },
+            ceilHex1() {
+                this.onEdit()
+            },
+            ceilHex2() {
+                this.onEdit()
             }
         }
     }
@@ -401,8 +470,12 @@
         text-align: center;
         cursor: pointer;
         /*border: 1px solid #eee;*/
+        &:hover {
+            background-color: #eee;
+        }
         &.active {
-            background-color: #ccc;
+            color: #fff;
+            background-color: #4285f4;
         }
     }
     .grid-data {
@@ -436,8 +509,12 @@
         width: 16px;
         text-align: center;
         cursor: pointer;
+        &:hover {
+            background-color: #eee;
+        }
         &.active {
-            background-color: #ccc;
+            color: #fff;
+            background-color: #4285f4;
         }
     }
     .loading {
@@ -447,6 +524,12 @@
         margin-top: 16px;
         margin-bottom: 16px;
         .btn {
+            margin-right: 8px;
+        }
+    }
+    .hex-select {
+        width: 64px;
+        &:first-child {
             margin-right: 8px;
         }
     }
